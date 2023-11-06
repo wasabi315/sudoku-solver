@@ -125,7 +125,7 @@ function solve(dlx) {
   }
   try {
     solve_sub();
-  } catch (err) {
+  } catch {
     return labels;
   }
 }
@@ -179,26 +179,38 @@ function solve_sudoku(size, get_num) {
       }
     }
   }
+
   const solution = solve(create_dlx(problem()));
   if (!solution) {
     return null;
   }
+
   const solutionArr = [...solution].sort();
   return (r, c) => Number(solutionArr[size * r + c].split("N")[1]);
 }
 
-function prepare_table(size) {
-  const inputTable = document.getElementById("input");
-  inputTable.replaceChildren();
+function prepare_table(size, table) {
+  table.replaceChildren();
+
+  const sqrt = Math.sqrt(size);
   const map = new Map();
+
   for (let r = 0; r < size; r++) {
-    const row = inputTable.appendChild(document.createElement("tr"));
+    const row = table.appendChild(document.createElement("tr"));
+    if ((r + 1) % sqrt === 0) {
+      row.classList.add("border-bottom");
+    }
     for (let c = 0; c < size; c++) {
       const cell = row.appendChild(document.createElement("td"));
+      if ((c + 1) % sqrt === 0) {
+        cell.classList.add("border-right");
+      }
+
       const input = cell.appendChild(document.createElement("input"));
       input.setAttribute("type", "number");
       input.setAttribute("min", "1");
       input.setAttribute("max", String(size));
+
       map.set(`R${r}C${c}`, input);
     }
   }
@@ -224,7 +236,8 @@ function prepare_table(size) {
 
 window.addEventListener("load", () => {
   const size = 9;
-  const table = prepare_table(size);
+  const grid = document.getElementById("grid");
+  const table = prepare_table(size, grid);
   const msg = document.getElementById("msg");
   document.getElementById("solve").addEventListener("click", () => {
     msg.innerText = "";

@@ -1,0 +1,24 @@
+:root {
+  --border: 2px solid black;
+}
+
+#grid {
+  border-collapse: collapse;
+  margin-bottom: 8px;
+}
+
+#grid tr:first-child td {
+  border-top: var(--border);
+}
+
+#grid tr.border-bottom td {
+  border-bottom: var(--border);
+}
+
+#grid td:first-child {
+  border-left: var(--border);
+}
+
+#grid td.border-right {
+  border-right: var(--border);
+}
