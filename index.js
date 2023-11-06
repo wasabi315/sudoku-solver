@@ -7,8 +7,8 @@ function create_header() {
   return header;
 }
 
-function create_node(header, label) {
-  const node = { header, label };
+function create_node(header, command) {
+  const node = { header, command };
   node.up = node;
   node.down = node;
   node.left = node;
@@ -73,7 +73,7 @@ function* skip(n, it) {
 
 function min_size_col(dlx) {
   return [...skip(1, iter("right", dlx))].reduce((prev, header) =>
-    prev.size > header.size ? header : prev
+    header.size < prev.size ? header : prev
   );
 }
 
@@ -107,26 +107,25 @@ function uncover(selected) {
   }
 }
 
-function solve(dlx) {
-  const labels = new Set();
-  function solve_sub() {
+async function solve(dlx) {
+  async function solve_sub() {
     if (is_solved(dlx)) {
       throw "solved";
     }
     const header = min_size_col(dlx);
     for (const node of skip(1, iter("down", header))) {
-      let label = node.label;
-      labels.add(label);
+      await node.command.do();
       cover(node);
-      solve_sub();
+      await solve_sub();
       uncover(node);
-      labels.delete(label);
+      await node.command.undo();
     }
   }
   try {
-    solve_sub();
-  } catch {
-    return labels;
+    await solve_sub();
+    return false;
+  } catch (err) {
+    return true;
   }
 }
 
@@ -134,7 +133,7 @@ function create_dlx(problem) {
   const headers = new Map();
   const root = create_header();
 
-  for (const [label, subset] of problem) {
+  for (const [command, subset] of problem) {
     let row_header = null;
 
     for (const elem of subset) {
@@ -145,7 +144,7 @@ function create_dlx(problem) {
         insert_left(root, col_header);
       }
 
-      const node = create_node(col_header, label);
+      const node = create_node(col_header, command);
       if (row_header) {
         insert_left(row_header, node);
       } else {
@@ -160,19 +159,28 @@ function create_dlx(problem) {
   return root;
 }
 
-function solve_sudoku(size, get_num) {
-  const sqrt = Math.sqrt(size);
+function solve_sudoku(grid, step) {
+  const sqrt = Math.sqrt(grid.size);
   function* problem() {
-    for (let r = 0; r < size; r++) {
-      for (let c = 0; c < size; c++) {
-        const num = get_num(r, c);
-        for (let n = 1; n <= size; n++) {
+    for (let r = 0; r < grid.size; r++) {
+      for (let c = 0; c < grid.size; c++) {
+        const num = grid.get(r, c);
+        for (let n = 1; n <= grid.size; n++) {
           if (num !== null && n !== num) {
             continue;
           }
           const b = sqrt * Math.floor(r / sqrt) + Math.floor(c / sqrt);
           yield [
-            `R${r}C${c}N${n}`,
+            {
+              async do() {
+                await step.next();
+                grid.set(r, c, n);
+              },
+              async undo() {
+                await step.next();
+                grid.set(r, c);
+              },
+            },
             [`R${r}C${c}`, `R${r}N${n}`, `C${c}N${n}`, `B${b}N${n}`],
           ];
         }
@@ -180,16 +188,10 @@ function solve_sudoku(size, get_num) {
     }
   }
 
-  const solution = solve(create_dlx(problem()));
-  if (!solution) {
-    return null;
-  }
-
-  const solutionArr = [...solution].sort();
-  return (r, c) => Number(solutionArr[size * r + c].split("N")[1]);
+  return solve(create_dlx(problem()));
 }
 
-function prepare_table(size, table) {
+function prepare_grid(size, table) {
   table.replaceChildren();
 
   const sqrt = Math.sqrt(size);
@@ -220,44 +222,68 @@ function prepare_table(size, table) {
     }
   }
   return {
+    size,
     get(r, c) {
       return Number(map.get(`R${r}C${c}`).value) || null;
     },
     set(r, c, n) {
       map.get(`R${r}C${c}`).value = n || "";
     },
-    set_all(get_num) {
+    clear() {
       for (let r = 0; r < size; r++) {
         for (let c = 0; c < size; c++) {
-          this.set(r, c, get_num(r, c));
+          this.set(r, c);
         }
       }
-    },
-    clear() {
-      this.set_all(() => {});
     },
   };
 }
 
+async function* listen(eventName, elem) {
+  const queue = [];
+  let notify = null;
+  const handler = (event) => {
+    queue.push(event);
+    if (notify !== null) {
+      notify();
+      notify = null;
+    }
+  };
+
+  elem.addEventListener(eventName, handler);
+  try {
+    while (true) {
+      if (queue.length === 0) {
+        await new Promise((resolve) => {
+          notify = resolve;
+        });
+      }
+      yield queue.shift();
+    }
+  } finally {
+    elem.removeEventListener(eventName, handler);
+  }
+}
+
 window.addEventListener("load", () => {
   const size = 9;
-  const grid = document.getElementById("grid");
-  const table = prepare_table(size, grid);
+  const table = document.getElementById("grid");
+  const grid = prepare_grid(size, table);
   const msg = document.getElementById("msg");
-  document.getElementById("solve").addEventListener("click", () => {
+  const step = listen("click", document.getElementById("step"));
+  document.getElementById("solve").addEventListener("click", async () => {
     msg.innerText = "";
     const start = performance.now();
-    const solution = solve_sudoku(size, table.get);
+    const solved = await solve_sudoku(grid, step);
     const end = performance.now();
-    if (!solution) {
+    if (!solved) {
       msg.innerText = "No solution";
       return;
     }
-    table.set_all(solution);
     msg.innerText = `Solved in ${Math.ceil(end - start)} msec.`;
   });
   document.getElementById("clear").addEventListener("click", () => {
     msg.innerText = "";
-    table.clear();
+    grid.clear();
   });
 });
