@@ -7,8 +7,8 @@ function create_header() {
   return header;
 }
 
-function create_node(header, command) {
-  const node = { header, command };
+function create_node(header, label) {
+  const node = { header, label };
   node.up = node;
   node.down = node;
   node.left = node;
@@ -114,17 +114,17 @@ async function solve(dlx) {
     }
     const header = min_size_col(dlx);
     for (const node of skip(1, iter("down", header))) {
-      await node.command.do();
+      await node.label.select();
       cover(node);
       await solve_sub();
       uncover(node);
-      await node.command.undo();
+      await node.label.unselect();
     }
   }
   try {
     await solve_sub();
     return false;
-  } catch (err) {
+  } catch {
     return true;
   }
 }
@@ -133,7 +133,7 @@ function create_dlx(problem) {
   const headers = new Map();
   const root = create_header();
 
-  for (const [command, subset] of problem) {
+  for (const [label, subset] of problem) {
     let row_header = null;
 
     for (const elem of subset) {
@@ -144,7 +144,7 @@ function create_dlx(problem) {
         insert_left(root, col_header);
       }
 
-      const node = create_node(col_header, command);
+      const node = create_node(col_header, label);
       if (row_header) {
         insert_left(row_header, node);
       } else {
@@ -172,14 +172,8 @@ function solve_sudoku(grid, step) {
           const b = sqrt * Math.floor(r / sqrt) + Math.floor(c / sqrt);
           yield [
             {
-              async do() {
-                await step.next();
-                grid.set(r, c, n);
-              },
-              async undo() {
-                await step.next();
-                grid.set(r, c);
-              },
+              select: () => step.next().then(() => grid.set(r, c, n)),
+              unselect: () => step.next().then(() => grid.set(r, c)),
             },
             [`R${r}C${c}`, `R${r}N${n}`, `C${c}N${n}`, `B${b}N${n}`],
           ];
@@ -240,42 +234,47 @@ function prepare_grid(size, table) {
 }
 
 async function* listen(eventName, elem) {
-  const queue = [];
-  let notify = null;
-  const handler = (event) => {
-    queue.push(event);
-    if (notify !== null) {
-      notify();
-      notify = null;
-    }
-  };
+  while (true) yield;
+  // const queue = [];
+  // let notify = null;
+  // const handler = (event) => {
+  //   queue.push(event);
+  //   if (notify !== null) {
+  //     notify();
+  //     notify = null;
+  //   }
+  // };
 
-  elem.addEventListener(eventName, handler);
-  try {
-    while (true) {
-      if (queue.length === 0) {
-        await new Promise((resolve) => {
-          notify = resolve;
-        });
-      }
-      yield queue.shift();
-    }
-  } finally {
-    elem.removeEventListener(eventName, handler);
-  }
+  // elem.addEventListener(eventName, handler);
+  // try {
+  //   while (true) {
+  //     if (queue.length === 0) {
+  //       await new Promise((resolve) => {
+  //         notify = resolve;
+  //       });
+  //     }
+  //     yield queue.shift();
+  //   }
+  // } finally {
+  //   elem.removeEventListener(eventName, handler);
+  // }
 }
 
 window.addEventListener("load", () => {
-  const size = 9;
+  const size = 36;
   const table = document.getElementById("grid");
   const grid = prepare_grid(size, table);
   const msg = document.getElementById("msg");
-  const step = listen("click", document.getElementById("step"));
   document.getElementById("solve").addEventListener("click", async () => {
+    const stepButton = document.getElementById("step");
+    stepButton.disabled = false;
+    const step = listen("click", stepButton);
     msg.innerText = "";
     const start = performance.now();
     const solved = await solve_sudoku(grid, step);
     const end = performance.now();
+    stepButton.disabled = true;
+    await step.return();
     if (!solved) {
       msg.innerText = "No solution";
       return;
