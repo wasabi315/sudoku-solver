@@ -210,6 +210,11 @@ function prepare_table(size, table) {
       input.setAttribute("type", "number");
       input.setAttribute("min", "1");
       input.setAttribute("max", String(size));
+      input.addEventListener("input", function () {
+        if (Number(this.value) < 1 || Number(this.value) > size) {
+          this.value = null;
+        }
+      });
 
       map.set(`R${r}C${c}`, input);
     }
