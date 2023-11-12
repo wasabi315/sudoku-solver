@@ -52,6 +52,16 @@ function relink_lr(node) {
   node.right.left = node;
 }
 
+function create_iter(dir) {
+  return function* (start) {
+    let node = start;
+    do {
+      yield node;
+      node = node[dir];
+    } while (node !== start);
+  };
+}
+
 function* iter(dir, start) {
   let node = start;
   do {
@@ -60,15 +70,15 @@ function* iter(dir, start) {
   } while (node !== start);
 }
 
-function is_solved(dlx) {
-  return dlx === dlx.right;
-}
-
-function* skip(n, it) {
+function skip(n, it) {
   while (n--) {
     it.next();
   }
-  yield* it;
+  return it;
+}
+
+function is_solved(dlx) {
+  return dlx === dlx.right;
 }
 
 function min_size_col(dlx) {
@@ -161,6 +171,7 @@ function create_dlx(problem) {
 
 function solve_sudoku(grid, step) {
   const sqrt = Math.sqrt(grid.size);
+
   function* problem() {
     for (let r = 0; r < grid.size; r++) {
       for (let c = 0; c < grid.size; c++) {
