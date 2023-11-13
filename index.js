@@ -16,6 +16,10 @@ function create_node(header, label) {
   return node;
 }
 
+function is_node(node_or_header) {
+  return "header" in node_or_header;
+}
+
 function insert_up(node, other) {
   other.down = node;
   other.up = node.up;
@@ -52,16 +56,6 @@ function relink_lr(node) {
   node.right.left = node;
 }
 
-function create_iter(dir) {
-  return function* (start) {
-    let node = start;
-    do {
-      yield node;
-      node = node[dir];
-    } while (node !== start);
-  };
-}
-
 function* iter(dir, start) {
   let node = start;
   do {
@@ -77,6 +71,18 @@ function skip(n, it) {
   return it;
 }
 
+function* filter(pred, it) {
+  while (true) {
+    const { value, done } = it.next();
+    if (done) {
+      return value;
+    }
+    if (pred(value)) {
+      yield value;
+    }
+  }
+}
+
 function is_solved(dlx) {
   return dlx === dlx.right;
 }
@@ -89,12 +95,8 @@ function min_size_col(dlx) {
 
 function cover(selected) {
   for (const node of iter("right", selected)) {
-    const header = node.header;
-    unlink_lr(header);
-    for (const col_node of skip(1, iter("down", node))) {
-      if (col_node === header) {
-        continue;
-      }
+    unlink_lr(node.header);
+    for (const col_node of filter(is_node, skip(1, iter("down", node)))) {
       for (const row_node of skip(1, iter("right", col_node))) {
         unlink_ud(row_node);
       }
@@ -104,12 +106,8 @@ function cover(selected) {
 
 function uncover(selected) {
   for (const node of iter("left", selected.left)) {
-    const header = node.header;
-    relink_lr(header);
-    for (const col_node of skip(1, iter("up", node))) {
-      if (col_node === header) {
-        continue;
-      }
+    relink_lr(node.header);
+    for (const col_node of filter(is_node, skip(1, iter("up", node)))) {
       for (const row_node of skip(1, iter("left", col_node))) {
         relink_ud(row_node);
       }
@@ -276,6 +274,7 @@ window.addEventListener("load", () => {
   const table = document.getElementById("grid");
   const grid = prepare_grid(size, table);
   const msg = document.getElementById("msg");
+
   document.getElementById("solve").addEventListener("click", async () => {
     const stepButton = document.getElementById("step");
     stepButton.disabled = false;
@@ -292,6 +291,7 @@ window.addEventListener("load", () => {
     }
     msg.innerText = `Solved in ${Math.ceil(end - start)} msec.`;
   });
+
   document.getElementById("clear").addEventListener("click", () => {
     msg.innerText = "";
     grid.clear();
